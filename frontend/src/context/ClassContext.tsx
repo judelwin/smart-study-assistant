@@ -39,7 +39,7 @@ export const ClassProvider: React.FC<ClassProviderProps> = ({ children }) => {
   // Fetch classes from backend
   const refreshClasses = async () => {
     try {
-      const res = await fetch('/classes', {
+      const res = await fetch('/api/classes', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
       const data = await res.json();
@@ -54,14 +54,19 @@ export const ClassProvider: React.FC<ClassProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    refreshClasses();
+    if (token) {
+      refreshClasses();
+    } else {
+      setClasses([]);
+      setSelectedClass(null);
+    }
     // eslint-disable-next-line
   }, [token]);
 
   const addClass = async (name: string) => {
     const formData = new FormData();
     formData.append('name', name);
-    const res = await fetch('/classes', {
+    const res = await fetch('/api/classes', {
       method: 'POST',
       body: formData,
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -79,7 +84,7 @@ export const ClassProvider: React.FC<ClassProviderProps> = ({ children }) => {
   };
 
   const deleteClass = async (classId: string) => {
-    await fetch(`/classes/${classId}`, {
+    await fetch(`/api/classes/${classId}`, {
       method: 'DELETE',
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     });

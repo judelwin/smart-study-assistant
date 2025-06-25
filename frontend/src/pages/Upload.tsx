@@ -12,6 +12,7 @@ const Upload: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const navigate = useNavigate();
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -44,12 +45,13 @@ const Upload: React.FC = () => {
   };
 
   const handleUpload = async () => {
-    if (!selectedClass || files.length === 0) return;
+    if (!selectedClass || files.length === 0 || isUploading) return;
+    setIsUploading(true);
     const formData = new FormData();
     formData.append('class_id', selectedClass.id);
     files.forEach(file => formData.append('files', file));
     try {
-      const res = await fetch('/upload', {
+      const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -70,6 +72,7 @@ const Upload: React.FC = () => {
     } catch (err) {
       alert('Network error');
     }
+    setIsUploading(false);
   };
 
   return (
@@ -146,9 +149,9 @@ const Upload: React.FC = () => {
                         <button
                             onClick={handleUpload}
                             className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-md transition duration-200 disabled:bg-gray-400"
-                            disabled={files.length === 0}
+                            disabled={files.length === 0 || isUploading}
                         >
-                            Upload {files.length} {files.length === 1 ? 'File' : 'Files'}
+                            {isUploading ? "Uploading..." : `Upload ${files.length} ${files.length === 1 ? 'File' : 'Files'}`}
                         </button>
                     </div>
                 </div>

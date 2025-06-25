@@ -41,6 +41,7 @@ services:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     depends_on:
       - redis
       - auth-service
@@ -68,6 +69,7 @@ services:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       - redis
       - auth-service
@@ -97,6 +99,7 @@ services:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     depends_on:
       - auth-service
     healthcheck:

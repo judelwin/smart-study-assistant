@@ -8,12 +8,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      '/api': 'http://localhost:8001',
       '/auth': 'http://localhost:8002',
-      '/classes': 'http://localhost:8001',
-      '/upload': 'http://localhost:8001',
-      '/documents': 'http://localhost:8001',
       '/query': 'http://localhost:8000',
-      // Add more endpoints as needed
-    }
+    },
+    historyApiFallback: true
   }
 })

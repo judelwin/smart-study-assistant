@@ -11,12 +11,13 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(''); // Clear error on new login attempt
     try {
       await login(email, password);
-      navigate('/');
+      navigate('/', { replace: true }); // Only navigate on success
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      const errorMessage = err.message || 'Login failed';
+      setError(errorMessage); // Set state
     }
   };
 

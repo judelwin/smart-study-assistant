@@ -2,6 +2,7 @@ import os
 import logging
 import uuid
 from typing import List
+import re
 
 import redis
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Form, Query
@@ -10,6 +11,9 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import requests
+from fastapi import APIRouter
+import boto3
+from pydantic import BaseModel
 
 from core.config import settings
 from core.database import get_db
@@ -17,7 +21,7 @@ from core import models
 from core.pdf_parser import extract_text_from_pdf
 from core.chunking import chunk_text
 from celery_config import celery_app
-from shared.storage import upload_file_to_s3
+from shared.storage import upload_file_to_s3, s3_client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -72,7 +76,7 @@ def health_check():
     return {"status": "ok"}
 
 
-@app.get("/classes", status_code=200)
+@app.get("/api/classes", status_code=200)
 def get_classes(db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
     """
     Returns a list of all classes.
@@ -81,7 +85,7 @@ def get_classes(db: Session = Depends(get_db), user_id: str = Depends(get_curren
     return classes
 
 
-@app.post("/classes", status_code=201)
+@app.post("/api/classes", status_code=201)
 def create_class(name: str = Form(...), db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
     """
     Creates a new class.
@@ -93,22 +97,32 @@ def create_class(name: str = Form(...), db: Session = Depends(get_db), user_id: 
     return new_class
 
 
-@app.delete("/classes/{class_id}", status_code=204)
+@app.delete("/api/classes/{class_id}", status_code=204)
 def delete_class(class_id: uuid.UUID, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
     """
-    Deletes a class and all associated documents.
+    Deletes a class and all associated documents, including S3 files.
     """
     db_class = db.query(models.Class).filter(models.Class.id == class_id, models.Class.user_id == user_id).first()
     if not db_class:
         raise HTTPException(status_code=404, detail="Class not found")
-    
+    # Delete all S3 files for this class
+    docs = db.query(models.Document).filter(models.Document.class_id == class_id).all()
+    for doc in docs:
+        if doc.s3_url:
+            match = re.match(r"https://([^.]+)\.s3\.[^.]+\.amazonaws\.com/(.+)", doc.s3_url)
+            if match:
+                bucket, key = match.group(1), match.group(2)
+                try:
+                    s3_client.delete_object(Bucket=bucket, Key=key)
+                except Exception as e:
+                    print(f"Warning: Failed to delete S3 file {key}: {e}")
     # Associated documents are deleted via CASCADE in the database
     db.delete(db_class)
     db.commit()
     return
 
 
-@app.post("/upload", status_code=200)
+@app.post("/api/upload", status_code=200)
 async def upload_files(
     class_id: uuid.UUID = Form(...),
     files: List[UploadFile] = File(...),
@@ -175,7 +189,7 @@ async def upload_files(
     return response_data
 
 
-@app.get("/documents", status_code=200)
+@app.get("/api/documents", status_code=200)
 def get_documents(class_id: uuid.UUID = Query(...), db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
     """
     Returns a list of all documents for a given class.
@@ -192,14 +206,23 @@ def get_documents(class_id: uuid.UUID = Query(...), db: Session = Depends(get_db
     ]
 
 
-@app.delete("/documents/{document_id}", status_code=204)
+@app.delete("/api/documents/{document_id}", status_code=204)
 def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
     """
-    Deletes a single document by its UUID and removes corresponding embeddings from Qdrant.
+    Deletes a single document by its UUID and removes corresponding embeddings from Qdrant and S3.
     """
     db_doc = db.query(models.Document).join(models.Class).filter(models.Document.id == document_id, models.Class.user_id == user_id).first()
     if not db_doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    # Delete S3 file
+    if db_doc.s3_url:
+        match = re.match(r"https://([^.]+)\.s3\.[^.]+\.amazonaws\.com/(.+)", db_doc.s3_url)
+        if match:
+            bucket, key = match.group(1), match.group(2)
+            try:
+                s3_client.delete_object(Bucket=bucket, Key=key)
+            except Exception as e:
+                print(f"Warning: Failed to delete S3 file {key}: {e}")
     db.delete(db_doc)
     db.commit()
     # Delete corresponding embeddings from Qdrant
@@ -220,6 +243,56 @@ def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), user_
     except Exception as e:
         logger.error(f"Failed to delete embeddings from Qdrant for document {document_id}: {e}")
     return
+
+
+class BatchPresignRequest(BaseModel):
+    document_ids: List[str]
+
+@app.post("/api/presign/batch")
+def get_batch_presigned_urls(request: BatchPresignRequest, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
+    """Get pre-signed URLs for multiple documents in a single request"""
+    # Fetch all documents for the user in a single query
+    docs = db.query(models.Document).filter(
+        models.Document.id.in_(request.document_ids),
+        models.Document.user_id == user_id
+    ).all()
+    
+    # Create a map of document_id to document
+    doc_map = {str(doc.id): doc for doc in docs}
+    
+    # Initialize S3 client once
+    s3 = boto3.client(
+        "s3",
+        region_name=os.getenv("AWS_S3_REGION", "us-east-2"),
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    )
+    
+    result = {}
+    for doc_id in request.document_ids:
+        doc = doc_map.get(doc_id)
+        if not doc or not doc.s3_url:
+            result[doc_id] = None
+            continue
+            
+        try:
+            # Parse bucket and key from s3_url
+            match = re.match(r"https://([^.]+)\.s3\.[^.]+\.amazonaws\.com/(.+)", doc.s3_url)
+            if not match:
+                result[doc_id] = None
+                continue
+                
+            bucket, key = match.group(1), match.group(2)
+            url = s3.generate_presigned_url(
+                ClientMethod='get_object',
+                Params={'Bucket': bucket, 'Key': key},
+                ExpiresIn=3600  # 1 hour
+            )
+            result[doc_id] = url
+        except Exception:
+            result[doc_id] = None
+    
+    return result
 
 
 if __name__ == "__main__":

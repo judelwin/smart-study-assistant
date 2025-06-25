@@ -75,7 +75,7 @@ def register(user: UserRegister, db = Depends(get_db)):
         "password_hash": password_hash
     })
     db.commit()
-    access_token = create_access_token(data={"sub": user_id})
+    access_token = create_access_token(data={"sub": str(user_id)})
     return Token(access_token=access_token, token_type="bearer")
 
 @app.post("/auth/login", response_model=Token)
@@ -86,7 +86,7 @@ def login(user: UserLogin, db = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not bcrypt.checkpw(user.password.encode('utf-8'), user_data.password_hash.encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    access_token = create_access_token(data={"sub": user_data.id})
+    access_token = create_access_token(data={"sub": str(user_data.id)})
     return Token(access_token=access_token, token_type="bearer")
 
 @app.get("/auth/me")

@@ -14,7 +14,7 @@ function Navigation() {
 
   return (
     <header className="bg-white shadow-sm border-b z-10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="px-4 sm:px-6 lg:px-8 w-full">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <h1 className="text-2xl font-bold text-gray-800">ClassGPT</h1>
@@ -37,7 +37,7 @@ function Navigation() {
             </span>
             <button
               onClick={logout}
-              className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition duration-200"
+              className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:bg-gray-200 cursor-pointer"
             >
               Logout
             </button>
@@ -77,9 +77,9 @@ function UnauthenticatedLayout() {
   return (
     <div className="h-screen bg-gray-100">
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={<Login key="login" />} />
         <Route path="/register" element={<Register />} />
-        <Route path="*" element={<Login />} />
+        <Route path="*" element={<Login key="login" />} />
       </Routes>
     </div>
   );
@@ -88,16 +88,10 @@ function UnauthenticatedLayout() {
 function AppContent() {
   const { user, isLoading } = useUserContext();
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading...</div>
-      </div>
-    );
-  }
-
+  // Don't show loading screen - it causes remounts
+  // Just render the appropriate layout and let components handle their own loading states
   return (
-    <Router>
+    <>
       {user ? (
         <ProtectedRoute>
           <AuthenticatedLayout />
@@ -105,19 +99,21 @@ function AppContent() {
       ) : (
         <UnauthenticatedLayout />
       )}
-    </Router>
+    </>
   );
 }
 
 function App() {
   return (
-    <UserProvider>
-      <ClassProvider>
-        <DocumentRefreshProvider>
-          <AppContent />
-        </DocumentRefreshProvider>
-      </ClassProvider>
-    </UserProvider>
+    <Router>
+      <UserProvider>
+        <ClassProvider>
+          <DocumentRefreshProvider>
+            <AppContent />
+          </DocumentRefreshProvider>
+        </ClassProvider>
+      </UserProvider>
+    </Router>
   );
 }
 

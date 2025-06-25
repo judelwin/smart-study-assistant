@@ -17,7 +17,7 @@ const Chat: React.FC = () => {
   const refreshDocumentMapping = async () => {
     if (!selectedClass) return;
     try {
-      const res = await fetch(`/documents?class_id=${selectedClass.id}`, {
+      const res = await fetch(`/api/documents?class_id=${selectedClass.id}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
       if (res.ok) {
@@ -46,7 +46,7 @@ const Chat: React.FC = () => {
     ]);
     // Fetch document list for mapping document_id to filename
     if (selectedClass) {
-      fetch(`/documents?class_id=${selectedClass.id}`)
+      fetch(`/api/documents?class_id=${selectedClass.id}`)
         .then(res => res.json())
         .then(docs => {
           const map: Record<string, string> = {};

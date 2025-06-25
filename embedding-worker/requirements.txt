@@ -7,3 +7,4 @@ pymupdf==1.23.8
 openai
 sentence-transformers
 qdrant-client 
+boto3

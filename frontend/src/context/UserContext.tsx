@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export interface User {
   id: string;
@@ -34,6 +35,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   const login = async (email: string, password: string) => {
     setIsLoading(true);
@@ -44,6 +46,9 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
         body: JSON.stringify({ email, password })
       });
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Invalid email or password.');
+        }
         const error = await response.json();
         throw new Error(error.detail || 'Login failed');
       }
@@ -57,8 +62,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
       const userData = await userResponse.json();
       setUser(userData);
     } catch (error) {
-      setUser(null);
-      setToken(null);
       throw error;
     } finally {
       setIsLoading(false);
@@ -87,8 +90,6 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
       const userData = await userResponse.json();
       setUser(userData);
     } catch (error) {
-      setUser(null);
-      setToken(null);
       throw error;
     } finally {
       setIsLoading(false);

@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useClassContext } from '../context/ClassContext';
 import { useDocumentRefresh } from '../context/DocumentRefreshContext';
+import { useUserContext } from '../context/UserContext';
 
 const POLL_INTERVAL = 5000; // 5 seconds
 
 const ClassSelector = forwardRef((_, ref) => {
   const { classes, selectedClass, addClass, selectClass, deleteClass } = useClassContext();
   const { refreshCount } = useDocumentRefresh();
+  const { token } = useUserContext();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newClassName, setNewClassName] = useState('');
   const [documents, setDocuments] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [presignedUrls, setPresignedUrls] = useState<Record<string, string>>({});
+  const [urlCacheExpiry, setUrlCacheExpiry] = useState<Record<string, number>>({});
 
   // Document fetch logic as a function
   const refreshDocuments = async () => {
@@ -21,14 +25,21 @@ const ClassSelector = forwardRef((_, ref) => {
     }
     setLoadingDocs(true);
     try {
-      const res = await fetch(`/documents?class_id=${selectedClass.id}`);
+      console.log('Fetching documents for class:', selectedClass.id);
+      const res = await fetch(`/api/documents?class_id=${selectedClass.id}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      console.log('Documents API response status:', res.status);
       if (res.ok) {
         const data = await res.json();
+        console.log('Documents API response data:', data);
         setDocuments(data);
       } else {
+        console.log('Documents API error:', res.status, res.statusText);
         setDocuments([]);
       }
     } catch (err) {
+      console.error('Documents API exception:', err);
       setDocuments([]);
     }
     setLoadingDocs(false);
@@ -58,7 +69,10 @@ const ClassSelector = forwardRef((_, ref) => {
 
   const handleDeleteDocument = async (docId: string) => {
     if (!window.confirm('Delete this document?')) return;
-    await fetch(`/documents/${docId}`, { method: 'DELETE' });
+    await fetch(`/api/documents/${docId}`, { 
+      method: 'DELETE',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    });
     refreshDocuments();
   };
 
@@ -70,6 +84,68 @@ const ClassSelector = forwardRef((_, ref) => {
       setIsModalOpen(false);
     }
   };
+
+  const getBatchPresignedUrls = async (docIds: string[]) => {
+    try {
+      const res = await fetch('/api/presign/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ document_ids: docIds }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data;
+      }
+    } catch (err) {
+      console.error('Failed to get batch presigned URLs:', err);
+    }
+    return {};
+  };
+
+  const getPresignedUrl = async (docId: string) => {
+    // Check cache first
+    const now = Date.now();
+    const expiry = urlCacheExpiry[docId] || 0;
+    
+    if (presignedUrls[docId] && now < expiry) {
+      return presignedUrls[docId];
+    }
+    
+    // Fetch new URL
+    const urls = await getBatchPresignedUrls([docId]);
+    const url = urls[docId];
+    
+    if (url) {
+      // Cache for 50 minutes (URLs expire in 1 hour)
+      setPresignedUrls(prev => ({ ...prev, [docId]: url }));
+      setUrlCacheExpiry(prev => ({ ...prev, [docId]: now + (50 * 60 * 1000) }));
+    }
+    
+    return url;
+  };
+
+  // Pre-fetch URLs when documents load
+  useEffect(() => {
+    if (documents.length > 0) {
+      const docIds = documents.map(doc => doc.id || doc.document_id);
+      getBatchPresignedUrls(docIds).then(urls => {
+        const now = Date.now();
+        const expiry = now + (50 * 60 * 1000); // 50 minutes
+        
+        setPresignedUrls(prev => ({ ...prev, ...urls }));
+        const newExpiry = { ...urlCacheExpiry };
+        docIds.forEach(id => {
+          if (urls[id]) {
+            newExpiry[id] = expiry;
+          }
+        });
+        setUrlCacheExpiry(newExpiry);
+      });
+    }
+  }, [documents, token]);
 
   return (
     <>
@@ -172,6 +248,25 @@ const ClassSelector = forwardRef((_, ref) => {
                             <span className="ml-2 px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 text-[10px] font-semibold">{doc.status}</span>
                           )}
                         </div>
+                        {/* Download button */}
+                        <button
+                          className="ml-2 text-gray-400 hover:text-blue-600 h-6 w-6 rounded-full flex items-center justify-center hover:bg-blue-100 transition-colors duration-200"
+                          title="Download document"
+                          style={{ flexShrink: 0 }}
+                          onClick={async () => {
+                            const url = await getPresignedUrl(doc.id || doc.document_id);
+                            if (url) {
+                              window.open(url, '_blank');
+                            } else {
+                              alert('Failed to get download link');
+                            }
+                          }}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                          </svg>
+                        </button>
+                        {/* Delete button */}
                         <button
                           className="ml-2 text-gray-400 hover:text-red-600 h-6 w-6 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors duration-200"
                           onClick={() => handleDeleteDocument(doc.id || doc.document_id)}
