@@ -1,9 +1,11 @@
 import os
 from celery import Celery
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 class Settings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379"
+    CELERY_REDIS_URL: Optional[str] = None  # Optional, for Celery-specific Redis URL
     DATABASE_URL: str = "postgresql://postgres:postgres@db:5432/classgpt"
 
     class Config:
@@ -11,11 +13,18 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+print("ENV REDIS_URL:", os.environ.get("REDIS_URL"))
+print("ENV CELERY_REDIS_URL:", os.environ.get("CELERY_REDIS_URL"))
+
+# Use CELERY_REDIS_URL if set, otherwise fall back to REDIS_URL
+celery_broker_url = settings.CELERY_REDIS_URL or settings.REDIS_URL
+print("CELERY BROKER URL:", celery_broker_url)
+
 # Create Celery app
 celery_app = Celery(
     "ingestion_service",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    broker=celery_broker_url,
+    backend=celery_broker_url,
 )
 
 # Celery configuration

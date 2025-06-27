@@ -160,7 +160,7 @@ const Chat: React.FC = () => {
                             >
                             <p className="text-base">{message.text}</p>
                             {/* Citations for AI messages */}
-                            {message.citations && message.citations.length > 0 && (
+                            {message.citations && message.citations.length > 0 && message.text.trim().toLowerCase() !== "i don't know." && (
                               <div className="mt-2 text-xs text-gray-500">
                                 Sources: {message.citations.map((c, i) => (
                                   <span key={i} className="mr-2">

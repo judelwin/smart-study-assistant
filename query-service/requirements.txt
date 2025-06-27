@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-qdrant-client
+pinecone
 openai
 sentence-transformers
 pydantic-settings 

@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 import json
 from embedding_providers import get_embedding_provider
 import openai
-from qdrant_utils import upsert_embeddings
+from pinecone_utils import upsert_embeddings
 from core.pdf_parser import extract_text_by_page
 from core.chunking import chunk_text
 import requests
@@ -176,7 +176,7 @@ def process_document(self, document_id: int, file_url: str):
         print(f"[CLASSGPT_DEBUG] Updating document status to 'processed'...")
         update_document_status(document_id, "processed")
         
-        print(f"[CLASSGPT_DEBUG] Upserting embeddings to Qdrant...")
+        print(f"[CLASSGPT_DEBUG] Upserting embeddings to Pinecone...")
         upsert_embeddings(str(document_id), all_chunks, embeddings, all_metadata)
         
         print(f"[CLASSGPT_DEBUG] Document processing completed successfully!")

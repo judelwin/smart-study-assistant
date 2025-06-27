@@ -31,9 +31,13 @@ def ensure_collection():
         # Try to create the collection, ignore if it already exists
         client.create_collection(
             collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE)
+            vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+            payload_schema={
+                "user_id": "keyword",
+                "class_id": "keyword"
+            }
         )
-        print(f"[CLASSGPT_DEBUG] Created collection '{COLLECTION_NAME}'")
+        print(f"[CLASSGPT_DEBUG] Created collection '{COLLECTION_NAME}' with payload indexes for user_id and class_id")
     except Exception as e:
         # Collection already exists, which is fine
         print(f"[CLASSGPT_DEBUG] Collection '{COLLECTION_NAME}' already exists or error: {e}")

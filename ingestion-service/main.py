@@ -3,12 +3,12 @@ import logging
 import uuid
 from typing import List
 import re
+import ssl
 
 import redis
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Form, Query
 from sqlalchemy.orm import Session
-from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, FieldCondition, MatchValue
+from pinecone import Pinecone
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import requests
 from fastapi import APIRouter
@@ -33,13 +33,22 @@ app = FastAPI(
     version="1.0.0",
 )
 
-redis_client = redis.from_url(settings.REDIS_URL)
+# Production-ready Redis client initialization for Upstash
+if ".upstash.io" in settings.REDIS_URL:
+    redis_client = redis.from_url(settings.REDIS_URL, ssl_cert_reqs=ssl.CERT_NONE)
+else:
+    redis_client = redis.from_url(settings.REDIS_URL)
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-QDRANT_URL = os.getenv("VECTOR_STORE_URL", "http://localhost:6333")
-QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "classgpt_chunks")
+# Pinecone configuration
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east-1")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "classgpt-chunks")
+
+# Initialize Pinecone client
+pc = Pinecone(api_key=PINECONE_API_KEY)
 
 security = HTTPBearer()
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8002/me")
@@ -209,7 +218,7 @@ def get_documents(class_id: uuid.UUID = Query(...), db: Session = Depends(get_db
 @app.delete("/api/documents/{document_id}", status_code=204)
 def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
     """
-    Deletes a single document by its UUID and removes corresponding embeddings from Qdrant and S3.
+    Deletes a single document by its UUID and removes corresponding embeddings from Pinecone and S3.
     """
     db_doc = db.query(models.Document).join(models.Class).filter(models.Document.id == document_id, models.Class.user_id == user_id).first()
     if not db_doc:
@@ -225,23 +234,13 @@ def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), user_
                 print(f"Warning: Failed to delete S3 file {key}: {e}")
     db.delete(db_doc)
     db.commit()
-    # Delete corresponding embeddings from Qdrant
+    # Delete corresponding embeddings from Pinecone
     try:
-        client = QdrantClient(url=QDRANT_URL)
-        client.delete(
-            collection_name=QDRANT_COLLECTION,
-            points_selector=Filter(
-                must=[
-                    FieldCondition(
-                        key="document_id",
-                        match=MatchValue(value=str(document_id))
-                    )
-                ]
-            )
-        )
-        logger.info(f"Successfully deleted embeddings from Qdrant for document {document_id}")
+        index = pc.Index(PINECONE_INDEX_NAME)
+        index.delete(filter={"document_id": str(document_id)})
+        logger.info(f"Successfully deleted embeddings from Pinecone for document {document_id}")
     except Exception as e:
-        logger.error(f"Failed to delete embeddings from Qdrant for document {document_id}: {e}")
+        logger.error(f"Failed to delete embeddings from Pinecone for document {document_id}: {e}")
     return
 
 

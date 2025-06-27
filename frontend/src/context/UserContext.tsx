@@ -114,14 +114,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
           const userData = await userResponse.json();
           setUser(userData);
         } else {
+          // Token is invalid or expired
           setUser(null);
           setToken(null);
           localStorage.removeItem('token');
         }
-      } catch {
-        setUser(null);
-        setToken(null);
-        localStorage.removeItem('token');
+      } catch (error) {
+        // Network error or service unavailable - don't clear token immediately
+        // This prevents clearing valid tokens when services are just temporarily down
+        console.log('Auth service unavailable, keeping token for retry');
+        // Don't clear the token on network errors - let the user retry when services are back
       }
     };
     fetchUser();

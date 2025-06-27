@@ -94,7 +94,11 @@ function AppContent() {
     <>
       {user ? (
         <ProtectedRoute>
-          <AuthenticatedLayout />
+          <ClassProvider>
+            <DocumentRefreshProvider>
+              <AuthenticatedLayout />
+            </DocumentRefreshProvider>
+          </ClassProvider>
         </ProtectedRoute>
       ) : (
         <UnauthenticatedLayout />
@@ -107,11 +111,7 @@ function App() {
   return (
     <Router>
       <UserProvider>
-        <ClassProvider>
-          <DocumentRefreshProvider>
-            <AppContent />
-          </DocumentRefreshProvider>
-        </ClassProvider>
+        <AppContent />
       </UserProvider>
     </Router>
   );

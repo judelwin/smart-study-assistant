@@ -2,10 +2,16 @@ import os
 from qdrant_client import QdrantClient
 from typing import List, Dict
 
-QDRANT_URL = os.getenv("VECTOR_STORE_URL", "http://vector-store:6333")
+# Use Qdrant Cloud environment variables
+QDRANT_URL = os.getenv("QDRANT_URL") or os.getenv("VECTOR_STORE_URL", "http://vector-store:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "classgpt_chunks")
 
-client = QdrantClient(url=QDRANT_URL)
+# Create client with API key if available
+if QDRANT_API_KEY:
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+else:
+    client = QdrantClient(url=QDRANT_URL)
 
 def search_embeddings(query_vector: List[float], top_k: int = 5, filter_payload: Dict = None):
     search_params = {}

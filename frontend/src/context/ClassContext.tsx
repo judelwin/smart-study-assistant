@@ -38,18 +38,28 @@ export const ClassProvider: React.FC<ClassProviderProps> = ({ children }) => {
 
   // Fetch classes from backend
   const refreshClasses = async () => {
+    if (!token) return; // Don't make API calls without a token
     try {
       const res = await fetch('/api/classes', {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        headers: { 'Authorization': `Bearer ${token}` },
       });
-      const data = await res.json();
-      setClasses(data);
-      // Auto-select first class if none selected
-      if (!selectedClass && data.length > 0) {
-        setSelectedClass(data[0]);
+      if (res.ok) {
+        const data = await res.json();
+        setClasses(data);
+        // Auto-select first class if none selected
+        if (!selectedClass && data.length > 0) {
+          setSelectedClass(data[0]);
+        }
+      } else {
+        // API error - clear classes but don't throw
+        console.log('Classes API error:', res.status);
+        setClasses([]);
+        setSelectedClass(null);
       }
     } catch (err) {
-      // Optionally handle error
+      // Network error or service unavailable
+      console.log('Classes service unavailable:', err);
+      // Don't clear classes on network errors - let the user retry when services are back
     }
   };
 

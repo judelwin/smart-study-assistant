@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from embedding_providers import get_embedding_provider
-from qdrant_utils import search_embeddings
+from pinecone_utils import search_embeddings
 from typing import List, Optional
 from openai import OpenAI
 import os
@@ -50,24 +50,35 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
 def query_chunks(request: QueryRequest, user_id: str = Depends(get_current_user_id)):
     embedding_provider = get_embedding_provider()
     query_embedding = embedding_provider.embed([request.query])[0]
+    
     # Filter by user_id and class_id or document_id
-    filter_payload = {"must": [{"key": "user_id", "match": {"value": user_id}}]}
+    filter_metadata = {"user_id": user_id}
     if request.class_id:
-        filter_payload["must"].append({"key": "class_id", "match": {"value": request.class_id}})
+        filter_metadata["class_id"] = request.class_id
     elif request.document_id:
-        filter_payload["must"].append({"key": "document_id", "match": {"value": request.document_id}})
-    hits = search_embeddings(query_embedding, top_k=request.top_k, filter_payload=filter_payload)
+        filter_metadata["document_id"] = request.document_id
+    
+    print(f"[DEBUG] Query embedding shape: {len(query_embedding)}")
+    print(f"[DEBUG] Pinecone filter: {filter_metadata}")
+    print(f"[DEBUG] Query: {request.query}")
+
+    hits = search_embeddings(query_embedding, top_k=request.top_k, filter_metadata=filter_metadata)
+    print(f"[DEBUG] Pinecone hits returned: {len(hits)}")
+    for i, hit in enumerate(hits):
+        print(f"[DEBUG] Hit {i+1}: id={hit['id']}, score={hit['score']}, payload_keys={list((hit['payload'] or {}).keys())}")
+
     results = []
     for hit in hits:
-        payload = hit.payload or {}
+        payload = hit["payload"] or {}
         results.append(ChunkResult(
             content=payload.get("content", ""),
             document_id=payload.get("document_id", ""),
             chunk_index=payload.get("chunk_index", -1),
-            score=hit.score,
+            score=hit["score"],
             page_number=payload.get("page_number", -1),
             payload=payload
         ))
+    
     # LLM synthesis
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     context = "\n\n".join([f"Chunk {i+1}: {chunk.content}" for i, chunk in enumerate(results)])
