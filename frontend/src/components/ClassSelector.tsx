@@ -16,6 +16,7 @@ const ClassSelector = forwardRef((_, ref) => {
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [presignedUrls, setPresignedUrls] = useState<Record<string, string>>({});
   const [urlCacheExpiry, setUrlCacheExpiry] = useState<Record<string, number>>({});
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
   // Document fetch logic as a function
   const refreshDocuments = async () => {
@@ -68,11 +69,14 @@ const ClassSelector = forwardRef((_, ref) => {
   }, [selectedClass, documents]);
 
   const handleDeleteDocument = async (docId: string) => {
+    if (deletingDocId) return; // Prevent multiple deletes
     if (!window.confirm('Delete this document?')) return;
+    setDeletingDocId(docId);
     await fetch(`/api/documents/${docId}`, { 
       method: 'DELETE',
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     });
+    setDeletingDocId(null);
     refreshDocuments();
   };
 
@@ -266,17 +270,22 @@ const ClassSelector = forwardRef((_, ref) => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
                           </svg>
                         </button>
-                        {/* Delete button */}
-                        <button
-                          className="ml-2 text-gray-400 hover:text-red-600 h-6 w-6 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors duration-200"
-                          onClick={() => handleDeleteDocument(doc.id || doc.document_id)}
-                          title="Delete document"
-                          style={{ flexShrink: 0 }}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                        {/* Delete button or Deleting... */}
+                        {deletingDocId === (doc.id || doc.document_id) ? (
+                          <span className="ml-2 text-gray-400">Deleting...</span>
+                        ) : (
+                          <button
+                            className="ml-2 text-gray-400 hover:text-red-600 h-6 w-6 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors duration-200"
+                            onClick={() => handleDeleteDocument(doc.id || doc.document_id)}
+                            title="Delete document"
+                            style={{ flexShrink: 0 }}
+                            disabled={!!deletingDocId}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>

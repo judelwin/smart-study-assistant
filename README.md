@@ -18,7 +18,7 @@ The system consists of several microservices:
 - **Ingestion Service**: PDF parsing and OCR for document processing
 - **Embedding Worker**: Converts text chunks to embeddings using Celery
 - **Query Service**: RAG pipeline with semantic search and LLM integration
-- **Vector Store**: Qdrant for embedding storage and retrieval
+- **Vector Store**: Pinecone for embedding storage and retrieval
 - **Database**: PostgreSQL for metadata and job tracking
 
 ## Quick Start
@@ -36,11 +36,7 @@ git clone <repository-url>
 cd classgpt
 ```
 
-2. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your OpenAI API key and other settings
-```
+2. Create a `.env` file in the project root and set the required environment variables. See the 'Configuration' section below for the full list of required variables (e.g., OPENAI_API_KEY, REDIS_URL, CELERY_REDIS_URL, DATABASE_URL, etc.).
 
 3. Start all services:
 ```bash
@@ -91,9 +87,44 @@ classgpt/
 
 Key environment variables:
 - `OPENAI_API_KEY`: Your OpenAI API key for LLM queries
-- `REDIS_URL`: Redis connection string for Celery
+- `REDIS_URL`: Redis connection string (Upstash recommended; use `rediss://` protocol)
+- `CELERY_REDIS_URL`: (Optional, but required for Upstash) Redis connection string for Celery with `/0?ssl_cert_reqs=CERT_NONE` appended. See below.
 - `DATABASE_URL`: PostgreSQL connection string
-- `VECTOR_STORE_URL`: Qdrant connection string
+- `VECTOR_STORE_URL`: Pinecone connection string
+
+## Example .env file
+
+Create a `.env` file in the project root with the following variables:
+
+```
+# OpenAI API key for LLM queries
+OPENAI_API_KEY=your-openai-api-key
+
+# Upstash Redis URLs (see Redis/Upstash and Celery Configuration section)
+REDIS_URL=rediss://default:yourpassword@your-upstash-url.upstash.io:6379
+CELERY_REDIS_URL=rediss://default:yourpassword@your-upstash-url.upstash.io:6379/0?ssl_cert_reqs=CERT_NONE
+
+# PostgreSQL connection string
+DATABASE_URL=postgresql://postgres:postgres@db:5432/classgpt
+
+# Pinecone vector store
+PINECONE_API_KEY=your-pinecone-api-key
+PINECONE_ENVIRONMENT=us-east-1
+PINECONE_INDEX_NAME=classgpt-chunks
+
+# AWS S3 for file storage
+AWS_ACCESS_KEY_ID=your-aws-access-key-id
+AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
+AWS_S3_BUCKET=your-s3-bucket
+AWS_S3_REGION=us-east-2
+
+# Auth service and JWT
+AUTH_SERVICE_URL=http://auth-service:8002/me
+JWT_SECRET_KEY=your-jwt-secret-key
+
+# (Optional) OpenAI API key for query-service
+OPENAI_API_KEY=your-openai-api-key
+```
 
 ## Usage
 
@@ -160,8 +191,37 @@ Each service can be deployed independently:
 - **Frontend**: Vercel, Netlify, or any static hosting
 - **Backend Services**: Railway, Google Cloud Run, AWS ECS, etc.
 - **Database**: Supabase, AWS RDS, etc.
-- **Vector Store**: Qdrant Cloud or self-hosted
+- **Vector Store**: Pinecone (Cloud)
 - **Storage**: AWS S3, Google Cloud Storage, etc.
+
+## Redis/Upstash and Celery Configuration
+
+If you use Upstash Redis (recommended for production):
+
+- Set `REDIS_URL` to your Upstash `rediss://` URL (no query params):
+  ```
+  REDIS_URL=rediss://default:<password>@<your-upstash-url>.upstash.io:6379
+  ```
+- Set `CELERY_REDIS_URL` to the same, but with `/0?ssl_cert_reqs=CERT_NONE` at the end:
+  ```
+  CELERY_REDIS_URL=rediss://default:<password>@<your-upstash-url>.upstash.io:6379/0?ssl_cert_reqs=CERT_NONE
+  ```
+- In Docker Compose, ensure both variables are passed to all Celery worker and backend services.
+- This is required for Celery to connect to Upstash with SSL.
+
+## Troubleshooting
+
+**Celery/Redis SSL Error:**
+
+If you see:
+```
+A rediss:// URL must have parameter ssl_cert_reqs and this must be set to CERT_REQUIRED, CERT_OPTIONAL, or CERT_NONE
+```
+Make sure your Celery worker and backend are using `CELERY_REDIS_URL` with the correct query parameter, and that it is passed in the Docker Compose environment.
+
+**Document Deletion UX:**
+
+When deleting a document, the UI now shows a "Deleting..." state and disables the delete button for that document until the operation completes. This prevents accidental multiple deletions and improves user experience.
 
 
 
