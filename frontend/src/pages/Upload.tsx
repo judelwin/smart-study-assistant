@@ -7,7 +7,7 @@ import { useUserContext } from '../context/UserContext';
 const Upload: React.FC = () => {
   const { selectedClass, selectClass } = useClassContext();
   const { triggerRefresh } = useDocumentRefresh();
-  const { token } = useUserContext();
+  const { token, usage } = useUserContext();
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -46,6 +46,7 @@ const Upload: React.FC = () => {
 
   const handleUpload = async () => {
     if (!selectedClass || files.length === 0 || isUploading) return;
+    
     setIsUploading(true);
     const formData = new FormData();
     formData.append('class_id', selectedClass.id);
@@ -67,10 +68,19 @@ const Upload: React.FC = () => {
         }, 1200);
       } else {
         const err = await res.json();
-        alert(err.detail || 'Upload failed');
+        // Show user-friendly error messages
+        if (err.detail) {
+          alert(err.detail);
+        } else if (res.status === 429) {
+          alert('Too many uploads. Please wait before trying again.');
+        } else if (res.status === 413) {
+          alert('File too large. Maximum file size is 10MB.');
+        } else {
+          alert('Upload failed. Please try again.');
+        }
       }
     } catch (err) {
-      alert('Network error');
+      alert('Network error. Please check your connection and try again.');
     }
     setIsUploading(false);
   };
@@ -118,7 +128,7 @@ const Upload: React.FC = () => {
                   or drag and drop
                 </p>
                 <p className="text-xs text-gray-500">
-                  PDF, DOCX, PPTX, or TXT files up to 50MB
+                  PDF, DOCX, PPTX, or TXT files up to 10MB
                 </p>
               </div>
             </div>

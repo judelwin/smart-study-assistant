@@ -8,13 +8,33 @@ export interface User {
   created_at: string;
 }
 
+interface UserUsage {
+  documents: {
+    current: number;
+    limit: number;
+    remaining: number;
+  };
+  classes: {
+    current: number;
+    limit: number;
+    remaining: number;
+  };
+  limits: {
+    max_file_size_mb: number;
+    max_files_per_upload: number;
+    uploads_per_hour: number;
+  };
+}
+
 interface UserContextType {
   user: User | null;
   token: string | null;
+  usage: UserUsage | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
+  refreshUsage: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -35,6 +55,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [isLoading, setIsLoading] = useState(false);
+  const [usage, setUsage] = useState<UserUsage | null>(null);
   const navigate = useNavigate();
 
   const login = async (email: string, password: string) => {
@@ -102,6 +123,21 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     localStorage.removeItem('token');
   };
 
+  const refreshUsage = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch('/api/user/usage', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const usageData = await response.json();
+        setUsage(usageData);
+      }
+    } catch (error) {
+      console.error('Failed to fetch usage data:', error);
+    }
+  };
+
   useEffect(() => {
     // On mount, try to fetch user info if token exists
     const fetchUser = async () => {
@@ -113,6 +149,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
         if (userResponse.ok) {
           const userData = await userResponse.json();
           setUser(userData);
+          // Fetch usage data after user is loaded
+          // await refreshUsage();
         } else {
           // Token is invalid or expired
           setUser(null);
@@ -132,10 +170,12 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const value: UserContextType = {
     user,
     token,
+    usage,
     login,
     register,
     logout,
     isLoading,
+    refreshUsage,
   };
 
   return (

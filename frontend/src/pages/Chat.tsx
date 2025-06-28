@@ -13,6 +13,9 @@ const Chat: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const [docIdToFilename, setDocIdToFilename] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const isUploading = false; // TODO: Replace with actual upload state from context if available
+  const [isMappingLoading, setIsMappingLoading] = useState(false);
 
   const refreshDocumentMapping = async () => {
     if (!selectedClass) return;
@@ -22,8 +25,13 @@ const Chat: React.FC = () => {
       });
       if (res.ok) {
         const docs = await res.json();
+        console.log('Documents API response:', docs);
         const map: Record<string, string> = {};
-        docs.forEach((doc: any) => { map[doc.id] = doc.filename; });
+        if (Array.isArray(docs)) {
+          docs.forEach((doc: any) => { map[doc.id] = doc.filename; });
+        } else {
+          console.error('Expected array but got:', typeof docs, docs);
+        }
         setDocIdToFilename(map);
       }
     } catch (err) {
@@ -46,21 +54,45 @@ const Chat: React.FC = () => {
     ]);
     // Fetch document list for mapping document_id to filename
     if (selectedClass) {
-      fetch(`/api/documents?class_id=${selectedClass.id}`)
+      fetch(`/api/documents?class_id=${selectedClass.id}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      })
         .then(res => res.json())
         .then(docs => {
+          console.log('useEffect documents response:', docs);
           const map: Record<string, string> = {};
-          docs.forEach((doc: any) => { map[doc.id] = doc.filename; });
+          if (Array.isArray(docs)) {
+            docs.forEach((doc: any) => { map[doc.id] = doc.filename; });
+          } else {
+            console.error('useEffect: Expected array but got:', typeof docs, docs);
+          }
           setDocIdToFilename(map);
+        })
+        .catch(err => {
+          console.error('Failed to fetch documents in useEffect:', err);
         });
     } else {
       setDocIdToFilename({});
     }
-  }, [selectedClass, refreshCount]);
+  }, [selectedClass, refreshCount, token]);
+
+  const ensureMappingReady = async () => {
+    console.log('Starting mapping refresh...');
+    setIsMappingLoading(true);
+    await refreshDocumentMapping();
+    setIsMappingLoading(false);
+    console.log('Mapping refresh complete');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || !selectedClass) return;
+    console.log('Submit clicked, isMappingLoading:', isMappingLoading, 'isUploading:', isUploading);
+    if (!inputValue.trim() || !selectedClass || isUploading || isMappingLoading) {
+      console.log('Submit blocked due to conditions');
+      return;
+    }
+
+    await ensureMappingReady();
 
     const userMessage = { id: Date.now(), text: inputValue, isUser: true };
     setMessages(prev => [...prev, userMessage]);
@@ -76,7 +108,7 @@ const Chat: React.FC = () => {
         body: JSON.stringify({
           query: userMessage.text,
           class_id: selectedClass.id,
-          top_k: 3
+          top_k: 5
         })
       });
       let data;
@@ -86,8 +118,15 @@ const Chat: React.FC = () => {
         throw new Error('Invalid JSON response from server.');
       }
       if (!res.ok) {
-        const errorMsg = data?.detail || data?.message || 'Unknown error from backend.';
-        throw new Error(errorMsg);
+        let errorMessage = data?.detail || data?.message || 'Unknown error from backend.';
+        if (res.status === 429) {
+          errorMessage = 'Too many queries. Please wait a moment before asking another question.';
+        } else if (res.status === 400 && data.detail) {
+          errorMessage = data.detail;
+        } else if (res.status === 401) {
+          errorMessage = 'Please log in again to continue.';
+        }
+        throw new Error(errorMessage);
       }
       // Collect citations from returned chunks, deduplicated by filename+page_number
       const seen = new Set<string>();
@@ -96,7 +135,6 @@ const Chat: React.FC = () => {
         page_number: chunk.page_number,
         filename: docIdToFilename[chunk.document_id] || 'Unknown document'
       })).filter((c: {filename: string, page_number: number}) => {
-        // Skip citations for unknown documents
         if (c.filename === 'Unknown document') return false;
         const key = `${c.filename}|${c.page_number}`;
         if (seen.has(key)) return false;
@@ -192,20 +230,23 @@ const Chat: React.FC = () => {
         <div className="bg-white border-t p-4 shadow-inner">
             <div className="max-w-4xl mx-auto">
             <form onSubmit={handleSubmit} className="flex space-x-4 items-center">
+                {isMappingLoading && (
+                  <div className="text-sm text-gray-500 mr-2">Refreshing documents...</div>
+                )}
                 <input
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder={selectedClass ? `Ask a question about ${selectedClass.name}...` : "Select a class to start"}
-                disabled={!selectedClass}
+                disabled={!selectedClass || isUploading || isMappingLoading}
                 className="flex-1 w-full border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                 />
                 <button
                 type="submit"
-                disabled={!selectedClass || !inputValue.trim()}
+                disabled={!selectedClass || !inputValue.trim() || isUploading || isMappingLoading}
                 className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold px-6 py-3 rounded-lg transition duration-200"
                 >
-                Send
+                {isMappingLoading ? 'Loading...' : 'Send'}
                 </button>
             </form>
             </div>

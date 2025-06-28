@@ -11,13 +11,20 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); // Clear error on new login attempt
+    setError('');
     try {
       await login(email, password);
-      navigate('/', { replace: true }); // Only navigate on success
+      navigate('/');
     } catch (err: any) {
-      const errorMessage = err.message || 'Login failed';
-      setError(errorMessage); // Set state
+      if (err.message.includes('Too many requests')) {
+        setError('Too many login attempts. Please wait before trying again.');
+      } else if (err.message.includes('Invalid email or password')) {
+        setError('Invalid email or password. Please check your credentials.');
+      } else if (err.message.includes('Network error')) {
+        setError('Connection error. Please check your internet and try again.');
+      } else {
+        setError(err.message || 'Login failed. Please try again.');
+      }
     }
   };
 

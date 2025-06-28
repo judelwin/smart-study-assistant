@@ -8,12 +8,25 @@ import os
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import requests
 from fastapi import Depends
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 app = FastAPI(
     title="ClassGPT Query Service",
     description="RAG pipeline and search endpoint for ClassGPT.",
     version="1.0.0",
 )
+
+# Rate limiting setup
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Conservative limits for personal project ($5-10/month budget)
+MAX_QUERY_LENGTH = 500  # Max 500 characters per query
+MAX_QUERIES_PER_HOUR = 30  # Max 30 queries per hour per user
+MAX_TOP_K = 10  # Max 10 results per query
 
 class QueryRequest(BaseModel):
     query: str
@@ -47,7 +60,22 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 @app.post("/query", response_model=LLMResponse)
+@limiter.limit("30/hour")  # Rate limit: 30 queries per hour per IP
 def query_chunks(request: QueryRequest, user_id: str = Depends(get_current_user_id)):
+    # Validate query length
+    if len(request.query) > MAX_QUERY_LENGTH:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Query too long. Maximum {MAX_QUERY_LENGTH} characters allowed."
+        )
+    
+    # Validate top_k
+    if request.top_k and request.top_k > MAX_TOP_K:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"top_k too high. Maximum {MAX_TOP_K} results allowed."
+        )
+    
     embedding_provider = get_embedding_provider()
     query_embedding = embedding_provider.embed([request.query])[0]
     
@@ -90,17 +118,23 @@ def query_chunks(request: QueryRequest, user_id: str = Depends(get_current_user_
         f"Question: {request.query}\n"
         "Answer:"
     )
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant for course materials."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=512,
-        temperature=0.2,
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500,  # Limit response length to control costs
+            temperature=0.1
+        )
+        answer = response.choices[0].message.content
+    except Exception as e:
+        print(f"[DEBUG] OpenAI API error: {e}")
+        answer = "I'm sorry, I encountered an error while processing your question. Please try again."
+    
+    return LLMResponse(
+        answer=answer,
+        chunks=results
     )
-    answer = response.choices[0].message.content.strip()
-    return LLMResponse(answer=answer, chunks=results)
 
 @app.get("/health")
 def health():

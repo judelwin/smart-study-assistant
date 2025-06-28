@@ -3,4 +3,5 @@ uvicorn[standard]
 pinecone
 openai
 sentence-transformers
-pydantic-settings 
+pydantic-settings
+slowapi 

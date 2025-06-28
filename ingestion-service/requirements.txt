@@ -10,4 +10,5 @@ pydantic-settings
 pinecone
 requests
 boto3
-upstash-redis 
+upstash-redis
+slowapi 

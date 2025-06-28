@@ -8,7 +8,7 @@ const POLL_INTERVAL = 5000; // 5 seconds
 const ClassSelector = forwardRef((_, ref) => {
   const { classes, selectedClass, addClass, selectClass, deleteClass } = useClassContext();
   const { refreshCount } = useDocumentRefresh();
-  const { token } = useUserContext();
+  const { token, usage } = useUserContext();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newClassName, setNewClassName] = useState('');
@@ -152,148 +152,148 @@ const ClassSelector = forwardRef((_, ref) => {
   }, [documents, token]);
 
   return (
-    <>
+    <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col h-full">
+      {/* Header */}
+      <div className="p-4 border-b border-gray-200">
+        <h2 className="text-lg font-semibold text-gray-800">Classes</h2>
+      </div>
+
       {/* Class Selector Sidebar */}
-      <div className="bg-white shadow-sm border-r border-gray-200 w-64 min-h-screen">
-        <div className="p-4">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Classes</h2>
-          
-          {/* Class Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <span>{selectedClass?.name || 'Select a class'}</span>
-              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+      <div className="p-4">
+        <div className="relative">
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <span>{selectedClass?.name || 'Select a class'}</span>
+            <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
 
-            {/* Dropdown Menu */}
-            {isDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white shadow-lg border border-gray-200 rounded-md">
-                <div className="py-1">
-                  {classes.map((cls) => (
-                    <div key={cls.id} className={`flex items-center justify-between px-3 text-sm hover:bg-gray-100 ${
-                        selectedClass?.id === cls.id ? 'bg-blue-50' : ''
-                    }`}>
-                        <button
-                            onClick={() => {
-                                selectClass(cls.id);
-                                setIsDropdownOpen(false);
-                            }}
-                            className={`w-full text-left py-2 ${selectedClass?.id === cls.id ? 'text-blue-700' : 'text-gray-700'}`}
-                        >
-                            {cls.name}
-                        </button>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (window.confirm(`Are you sure you want to delete "${cls.name}"? This action cannot be undone.`)) {
-                                    deleteClass(cls.id);
-                                }
-                            }}
-                            className="text-gray-400 hover:text-red-600 p-1 rounded-full"
-                            aria-label={`Delete ${cls.name}`}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
-                  ))}
-                  <div className="border-t border-gray-200">
-                    <button
-                      onClick={() => {
-                        setIsModalOpen(true);
-                        setIsDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
-                    >
-                      + Create New Class
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Selected Class Info */}
-          {selectedClass && (
-            <div className="mt-4 p-3 bg-gray-50 rounded-md">
-              <h3 className="text-sm font-medium text-gray-900">{selectedClass.name}</h3>
-              {'createdAt' in selectedClass && selectedClass.createdAt ? (
-                <p className="text-xs text-gray-500 mt-1">
-                  Created {new Date((selectedClass as any).createdAt).toLocaleDateString()}
-                </p>
-              ) : null}
-              {/* Document List */}
-              <div className="mt-4">
-                <h4 className="text-xs font-semibold text-gray-700 mb-2">Documents</h4>
-                {loadingDocs ? (
-                  <p className="text-xs text-gray-400">Loading...</p>
-                ) : documents.length === 0 ? (
-                  <p className="text-xs text-gray-400">No documents uploaded.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {documents.map((doc) => (
-                      <li key={doc.id || doc.document_id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1 border overflow-hidden">
-                        <div className="flex items-center min-w-0">
-                          {/* File icon */}
-                          <svg className="h-4 w-4 text-gray-400 flex-shrink-0 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7V3a1 1 0 011-1h8a1 1 0 011 1v18a1 1 0 01-1 1H8a1 1 0 01-1-1v-4" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 7v10m0 0h10" />
-                          </svg>
-                          {/* Truncated filename with tooltip */}
-                          <span className="truncate max-w-[110px]" title={doc.filename || doc.name}>{doc.filename || doc.name}</span>
-                          {/* Show status only if not processed */}
-                          {doc.status && doc.status !== 'processed' && (
-                            <span className="ml-2 px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 text-[10px] font-semibold">{doc.status}</span>
-                          )}
-                        </div>
-                        {/* Download button */}
-                        <button
-                          className="ml-2 text-gray-400 hover:text-blue-600 h-6 w-6 rounded-full flex items-center justify-center hover:bg-blue-100 transition-colors duration-200"
-                          title="Download document"
-                          style={{ flexShrink: 0 }}
-                          onClick={async () => {
-                            const url = await getPresignedUrl(doc.id || doc.document_id);
-                            if (url) {
-                              window.open(url, '_blank');
-                            } else {
-                              alert('Failed to get download link');
-                            }
+          {/* Dropdown Menu */}
+          {isDropdownOpen && (
+            <div className="absolute z-10 mt-1 w-full bg-white shadow-lg border border-gray-200 rounded-md">
+              <div className="py-1">
+                {classes.map((cls) => (
+                  <div key={cls.id} className={`flex items-center justify-between px-3 text-sm hover:bg-gray-100 ${
+                      selectedClass?.id === cls.id ? 'bg-blue-50' : ''
+                  }`}>
+                      <button
+                          onClick={() => {
+                              selectClass(cls.id);
+                              setIsDropdownOpen(false);
                           }}
-                        >
+                          className={`w-full text-left py-2 ${selectedClass?.id === cls.id ? 'text-blue-700' : 'text-gray-700'}`}
+                      >
+                          {cls.name}
+                      </button>
+                      <button
+                          onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Are you sure you want to delete "${cls.name}"? This action cannot be undone.`)) {
+                                  deleteClass(cls.id);
+                              }
+                          }}
+                          className="text-gray-400 hover:text-red-600 p-1 rounded-full"
+                          aria-label={`Delete ${cls.name}`}
+                      >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-                          </svg>
-                        </button>
-                        {/* Delete button or Deleting... */}
-                        {deletingDocId === (doc.id || doc.document_id) ? (
-                          <span className="ml-2 text-gray-400">Deleting...</span>
-                        ) : (
-                          <button
-                            className="ml-2 text-gray-400 hover:text-red-600 h-6 w-6 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors duration-200"
-                            onClick={() => handleDeleteDocument(doc.id || doc.document_id)}
-                            title="Delete document"
-                            style={{ flexShrink: 0 }}
-                            disabled={!!deletingDocId}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                          </svg>
+                      </button>
+                  </div>
+                ))}
+                <div className="border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setIsModalOpen(true);
+                      setIsDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                  >
+                    + Create New Class
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
+
+        {/* Selected Class Info */}
+        {selectedClass && (
+          <div className="mt-4 p-3 bg-gray-50 rounded-md">
+            <h3 className="text-sm font-medium text-gray-900">{selectedClass.name}</h3>
+            {'createdAt' in selectedClass && selectedClass.createdAt ? (
+              <p className="text-xs text-gray-500 mt-1">
+                Created {new Date((selectedClass as any).createdAt).toLocaleDateString()}
+              </p>
+            ) : null}
+            {/* Document List */}
+            <div className="mt-4">
+              <h4 className="text-xs font-semibold text-gray-700 mb-2">Documents</h4>
+              {loadingDocs ? (
+                <p className="text-xs text-gray-400">Loading...</p>
+              ) : documents.length === 0 ? (
+                <p className="text-xs text-gray-400">No documents uploaded.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {documents.map((doc) => (
+                    <li key={doc.id || doc.document_id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1 border overflow-hidden">
+                      <div className="flex items-center min-w-0">
+                        {/* File icon */}
+                        <svg className="h-4 w-4 text-gray-400 flex-shrink-0 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7V3a1 1 0 011-1h8a1 1 0 011 1v18a1 1 0 01-1 1H8a1 1 0 01-1-1v-4" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 7v10m0 0h10" />
+                        </svg>
+                        {/* Truncated filename with tooltip */}
+                        <span className="truncate max-w-[110px]" title={doc.filename || doc.name}>{doc.filename || doc.name}</span>
+                        {/* Show status only if not processed */}
+                        {doc.status && doc.status !== 'processed' && (
+                          <span className="ml-2 px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 text-[10px] font-semibold">{doc.status}</span>
+                        )}
+                      </div>
+                      {/* Download button */}
+                      <button
+                        className="ml-2 text-gray-400 hover:text-blue-600 h-6 w-6 rounded-full flex items-center justify-center hover:bg-blue-100 transition-colors duration-200"
+                        title="Download document"
+                        style={{ flexShrink: 0 }}
+                        onClick={async () => {
+                          const url = await getPresignedUrl(doc.id || doc.document_id);
+                          if (url) {
+                            window.open(url, '_blank');
+                          } else {
+                            alert('Failed to get download link');
+                          }
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                        </svg>
+                      </button>
+                      {/* Delete button or Deleting... */}
+                      {deletingDocId === (doc.id || doc.document_id) ? (
+                        <span className="ml-2 text-gray-400">Deleting...</span>
+                      ) : (
+                        <button
+                          className="ml-2 text-gray-400 hover:text-red-600 h-6 w-6 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors duration-200"
+                          onClick={() => handleDeleteDocument(doc.id || doc.document_id)}
+                          title="Delete document"
+                          style={{ flexShrink: 0 }}
+                          disabled={!!deletingDocId}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Create Class Modal */}
@@ -340,7 +340,7 @@ const ClassSelector = forwardRef((_, ref) => {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 });
 

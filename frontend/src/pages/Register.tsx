@@ -16,7 +16,15 @@ const Register: React.FC = () => {
       await register(email, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.message || 'Registration failed');
+      if (err.message.includes('Too many requests')) {
+        setError('Too many registration attempts. Please wait before trying again.');
+      } else if (err.message.includes('Email already registered')) {
+        setError('This email is already registered. Please try logging in instead.');
+      } else if (err.message.includes('Network error')) {
+        setError('Connection error. Please check your internet and try again.');
+      } else {
+        setError(err.message || 'Registration failed. Please try again.');
+      }
     }
   };
 

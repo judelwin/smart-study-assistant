@@ -14,6 +14,9 @@ import requests
 from fastapi import APIRouter
 import boto3
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from core.config import settings
 from core.database import get_db
@@ -27,11 +30,25 @@ from shared.storage import upload_file_to_s3, s3_client
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Rate limiting setup
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(
     title="ClassGPT Ingestion Service",
     description="Handles file uploads, class management, and queues documents for embedding.",
     version="1.0.0",
 )
+
+# Add rate limiting error handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Conservative limits for personal project ($5-10/month budget)
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per file (reduced from 50MB)
+MAX_FILES_PER_UPLOAD = 3  # Max 3 files per upload
+MAX_DOCUMENTS_PER_USER = 50  # Max 50 documents per user
+MAX_CLASSES_PER_USER = 5  # Max 5 classes per user
+MAX_UPLOADS_PER_HOUR = 10  # Max 10 uploads per hour per user
 
 # Production-ready Redis client initialization for Upstash
 if ".upstash.io" in settings.REDIS_URL:
@@ -95,11 +112,27 @@ def get_classes(db: Session = Depends(get_db), user_id: str = Depends(get_curren
 
 
 @app.post("/api/classes", status_code=201)
-def create_class(name: str = Form(...), db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
-    """
-    Creates a new class.
-    """
-    new_class = models.Class(name=name, user_id=user_id)
+@limiter.limit("5/hour")  # Rate limit: 5 class creations per hour per IP
+async def create_class(
+    class_data: ClassCreate,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Create a new class for the authenticated user."""
+    
+    # Check user class quota
+    user_class_count = db.query(models.Class).filter(models.Class.user_id == user_id).count()
+    if user_class_count >= MAX_CLASSES_PER_USER:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"You have reached your class limit. Maximum {MAX_CLASSES_PER_USER} classes allowed."
+        )
+    
+    new_class = models.Class(
+        id=uuid.uuid4(),
+        name=class_data.name,
+        user_id=user_id,
+    )
     db.add(new_class)
     db.commit()
     db.refresh(new_class)
@@ -132,6 +165,7 @@ def delete_class(class_id: uuid.UUID, db: Session = Depends(get_db), user_id: st
 
 
 @app.post("/api/upload", status_code=200)
+@limiter.limit("10/hour")  # Rate limit: 10 uploads per hour per IP
 async def upload_files(
     class_id: uuid.UUID = Form(...),
     files: List[UploadFile] = File(...),
@@ -144,7 +178,32 @@ async def upload_files(
     if not files:
         raise HTTPException(status_code=400, detail="No files were sent.")
 
-    # 1. Verify class exists
+    # Validate number of files
+    if len(files) > MAX_FILES_PER_UPLOAD:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Too many files. Maximum {MAX_FILES_PER_UPLOAD} files per upload."
+        )
+
+    # Validate file sizes
+    total_size = 0
+    for file in files:
+        if file.size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"File {file.filename} is too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB."
+            )
+        total_size += file.size
+
+    # Check user document quota
+    user_doc_count = db.query(models.Document).filter(models.Document.user_id == user_id).count()
+    if user_doc_count + len(files) > MAX_DOCUMENTS_PER_USER:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Upload would exceed your document limit. You have {user_doc_count}/{MAX_DOCUMENTS_PER_USER} documents."
+        )
+
+    # 1. Verify class exists and belongs to user
     db_class = db.query(models.Class).filter(models.Class.id == class_id, models.Class.user_id == user_id).first()
     if not db_class:
         raise HTTPException(status_code=404, detail=f"Class with ID {class_id} not found.")
@@ -247,6 +306,9 @@ def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), user_
 class BatchPresignRequest(BaseModel):
     document_ids: List[str]
 
+class ClassCreate(BaseModel):
+    name: str
+
 @app.post("/api/presign/batch")
 def get_batch_presigned_urls(request: BatchPresignRequest, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
     """Get pre-signed URLs for multiple documents in a single request"""
@@ -292,6 +354,31 @@ def get_batch_presigned_urls(request: BatchPresignRequest, db: Session = Depends
             result[doc_id] = None
     
     return result
+
+
+@app.get("/api/user/usage")
+def get_user_usage(db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
+    """Get current user usage statistics"""
+    doc_count = db.query(models.Document).filter(models.Document.user_id == user_id).count()
+    class_count = db.query(models.Class).filter(models.Class.user_id == user_id).count()
+    
+    return {
+        "documents": {
+            "current": doc_count,
+            "limit": MAX_DOCUMENTS_PER_USER,
+            "remaining": MAX_DOCUMENTS_PER_USER - doc_count
+        },
+        "classes": {
+            "current": class_count,
+            "limit": MAX_CLASSES_PER_USER,
+            "remaining": MAX_CLASSES_PER_USER - class_count
+        },
+        "limits": {
+            "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
+            "max_files_per_upload": MAX_FILES_PER_UPLOAD,
+            "uploads_per_hour": MAX_UPLOADS_PER_HOUR
+        }
+    }
 
 
 if __name__ == "__main__":

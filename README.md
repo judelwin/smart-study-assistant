@@ -100,30 +100,32 @@ Create a `.env` file in the project root with the following variables:
 # OpenAI API key for LLM queries
 OPENAI_API_KEY=your-openai-api-key
 
-# Upstash Redis URLs (see Redis/Upstash and Celery Configuration section)
-REDIS_URL=rediss://default:yourpassword@your-upstash-url.upstash.io:6379
-CELERY_REDIS_URL=rediss://default:yourpassword@your-upstash-url.upstash.io:6379/0?ssl_cert_reqs=CERT_NONE
+# Redis connection strings
+REDIS_URL=your-redis-url
+CELERY_REDIS_URL=your-celery-redis-url
 
 # PostgreSQL connection string
-DATABASE_URL=postgresql://postgres:postgres@db:5432/classgpt
+DATABASE_URL=your-postgresql-url
 
 # Pinecone vector store
 PINECONE_API_KEY=your-pinecone-api-key
-PINECONE_ENVIRONMENT=us-east-1
-PINECONE_INDEX_NAME=classgpt-chunks
+PINECONE_ENVIRONMENT=your-pinecone-environment
+PINECONE_INDEX_NAME=your-index-name
 
 # AWS S3 for file storage
 AWS_ACCESS_KEY_ID=your-aws-access-key-id
 AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
 AWS_S3_BUCKET=your-s3-bucket
-AWS_S3_REGION=us-east-2
+AWS_S3_REGION=your-s3-region
 
 # Auth service and JWT
-AUTH_SERVICE_URL=http://auth-service:8002/me
+AUTH_SERVICE_URL=your-auth-service-url
 JWT_SECRET_KEY=your-jwt-secret-key
 
-# (Optional) OpenAI API key for query-service
-OPENAI_API_KEY=your-openai-api-key
+# Frontend API URLs (for production deployment)
+VITE_INGESTION_SERVICE_URL=https://your-ingestion-service-url.com
+VITE_AUTH_SERVICE_URL=https://your-auth-service-url.com
+VITE_QUERY_SERVICE_URL=https://your-query-service-url.com
 ```
 
 ## Usage
@@ -187,12 +189,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Production Deployment
 
-Each service can be deployed independently:
-- **Frontend**: Vercel, Netlify, or any static hosting
-- **Backend Services**: Railway, Google Cloud Run, AWS ECS, etc.
-- **Database**: Supabase, AWS RDS, etc.
-- **Vector Store**: Pinecone (Cloud)
-- **Storage**: AWS S3, Google Cloud Storage, etc.
+Each service can be deployed independently to your preferred cloud platform.
 
 ## Redis/Upstash and Celery Configuration
 
@@ -222,6 +219,33 @@ Make sure your Celery worker and backend are using `CELERY_REDIS_URL` with the c
 **Document Deletion UX:**
 
 When deleting a document, the UI now shows a "Deleting..." state and disables the delete button for that document until the operation completes. This prevents accidental multiple deletions and improves user experience.
+
+## Security and Usage Limits
+
+This application includes conservative rate limiting and usage quotas to prevent abuse and control costs for a personal project budget of $5-10/month:
+
+### Rate Limits
+- **File Uploads**: 10 uploads per hour per IP
+- **Queries**: 30 queries per hour per IP  
+- **Class Creation**: 5 classes per hour per IP
+- **Login Attempts**: 10 attempts per hour per IP
+- **Registrations**: 5 registrations per hour per IP
+
+### Usage Quotas
+- **File Size**: Maximum 10MB per file
+- **Files per Upload**: Maximum 3 files per upload
+- **Documents per User**: Maximum 50 documents per user
+- **Classes per User**: Maximum 5 classes per user
+- **Query Length**: Maximum 500 characters per query
+- **Query Results**: Maximum 10 results per query
+
+### Cost Control Measures
+- OpenAI API responses limited to 500 tokens
+- File size limits reduce S3 storage costs
+- Rate limiting prevents API abuse
+- User quotas prevent unlimited resource consumption
+
+These limits are designed to keep monthly costs under $10 while allowing normal usage for personal/educational projects.
 
 
 
