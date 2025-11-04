@@ -134,19 +134,7 @@ VITE_QUERY_SERVICE_URL=https://your-query-service-url.com
 2. **Upload Documents**: Drag and drop PDFs, slides, or notes
 3. **Ask Questions**: Type questions about your course materials
 4. **Get Answers**: Receive AI-generated responses with source citations
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
+5. 
 ## Quick Start
 
 ### Prerequisites
@@ -246,6 +234,7 @@ This application includes conservative rate limiting and usage quotas to prevent
 - User quotas prevent unlimited resource consumption
 
 These limits are designed to keep monthly costs under $10 while allowing normal usage for personal/educational projects.
+
 
 
 
