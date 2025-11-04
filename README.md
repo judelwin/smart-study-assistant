@@ -1,10 +1,10 @@
-# ClassGPT
+# Smart Study Assistant
 
 A scalable, modular Retrieval-Augmented Generation (RAG) system designed for multi-class academic document ingestion, semantic search, and LLM-based Q&A.
 
 ## Overview
 
-ClassGPT allows students and educators to:
+Smart Study Assistant allows students and educators to:
 - Upload academic documents (PDFs, slides, notes) organized by class
 - Ask questions about course materials using natural language
 - Receive generated answers with source citations
@@ -33,7 +33,7 @@ The system consists of several microservices:
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd classgpt
+cd Smart Study Assistant
 ```
 
 2. Create a `.env` file in the project root and set the required environment variables. See the 'Configuration' section below for the full list of required variables (e.g., OPENAI_API_KEY, REDIS_URL, CELERY_REDIS_URL, DATABASE_URL, etc.).
@@ -72,7 +72,7 @@ pip install -r requirements.txt
 ## Project Structure
 
 ```
-classgpt/
+Smart Study Assistant/
 ├── frontend/              # React + Tailwind UI
 ├── ingestion-service/     # PDF/slide parsing + OCR
 ├── embedding-worker/      # Celery worker for embedding jobs
@@ -246,6 +246,7 @@ This application includes conservative rate limiting and usage quotas to prevent
 - User quotas prevent unlimited resource consumption
 
 These limits are designed to keep monthly costs under $10 while allowing normal usage for personal/educational projects.
+
 
 
 
